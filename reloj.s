@@ -88,6 +88,7 @@ TIMER_SEGUNDOS1: DS 1
 TIMER_SEGUNDOS2: DS 1
 TIMER_MINUTOS1: DS 1
 TIMER_MINUTOS2: DS 1
+LUZ:		DS 1
     
     
 
@@ -130,6 +131,7 @@ POP:
 INT_TMR0:
     RESET_TMR0 251		; Reiniciamos TMR0 para 50ms
     CALL    MOSTRAR_VALOR	; Mostramos valor en hexadecimal en los displays
+    INCF    LUZ
     RETURN
     
 INT_PORTB:
@@ -326,13 +328,13 @@ D_HORAS:
     
     BTFSC   PORTB, BAUMENTO
     INCF    HOR1
-    BTFSC   PORTB, BAUMENTO
-   CALL    HORAS_AUMENTO	
+    ;BTFSC   PORTB, BAUMENTO
+   ;CALL    HORAS_AUMENTO	
     BTFSC   PORTB, BDECREMENTO
     DECF    HOR1
-    CALL    UNDERFLOW_HORAS
+    ;CALL    UNDERFLOW_HORAS
     
-    MOVLW	1
+   /* MOVLW	1
     SUBWF	chequeo_underflow2, W
     BTFSC	STATUS, 2
     CALL	DECREMENTO_RELOJ_HORAS 
@@ -421,7 +423,7 @@ TODO_CERO_H:
     XORWF	HOR1, W
     BTFSC	STATUS, 2
     DECF	chequeo_underflow2
-    RETURN
+    RETURN*/
 	
 SEGUIR:
     BSF	    TMR1ON
@@ -523,8 +525,25 @@ LOOP:
     CALL    OBTENER_NIBBLE	; Guardamos nibble alto y bajo de valor
     CALL    SET_DISPLAY		; Guardamos los valores a enviar en PORTC para mostrar valor en hex
     CALL    SEGUNDOS60    
+    CALL    LUCES
     GOTO    LOOP		; Regresamos al LOOP
     
+;----------------- LUCES ----------------------
+LUCES:
+    MOVLW   50
+    SUBWF   LUZ, W
+    BTFSC   STATUS, 2
+    BSF	    PORTA, 1
+    CLRF    STATUS
+    
+    MOVLW   100
+    SUBWF   LUZ, W
+    BTFSC   STATUS, 2
+    BCF	    PORTA, 1
+    BTFSC   STATUS, 2
+    CLRF    LUZ
+    RETURN
+   
 ; ----------------CHEQUEO DE SEGUNDOS----------**
     
 SEGUNDOS60:
