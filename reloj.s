@@ -89,8 +89,7 @@ TIMER_SEGUNDOS2: DS 1
 TIMER_MINUTOS1: DS 1
 TIMER_MINUTOS2: DS 1
 LUZ:		DS 1
-    
-    
+chequeo_19:	DS 1    
 
     
     
@@ -171,7 +170,7 @@ ESTADO_2:
     BTFSC   PORTB, BMODO		; Si se presionó botón de cambio de modo
     BCF	    BANDERAS, 2		
     BTFSC   PORTB, BMODO
-    BCF	    BANDERAS, 1
+    BCF	    BANDERAS, 0
     BCF	    RBIF			; Limpiamos bandera de interrupción
     
     CALL    TIMER
@@ -328,22 +327,23 @@ D_HORAS:
     
     BTFSC   PORTB, BAUMENTO
     INCF    HOR1
-    ;BTFSC   PORTB, BAUMENTO
-   ;CALL    HORAS_AUMENTO	
+    BTFSC   PORTB, BAUMENTO
+    CALL    HORAS_AUMENTO	
     BTFSC   PORTB, BDECREMENTO
     DECF    HOR1
     ;CALL    UNDERFLOW_HORAS
     
-   /* MOVLW	1
+  /* MOVLW	1
     SUBWF	chequeo_underflow2, W
     BTFSC	STATUS, 2
     CALL	DECREMENTO_RELOJ_HORAS 
     CLRF	STATUS
-    BCF		RBIF
+    BCF		RBIF*/
     RETURN
     
 HORAS_AUMENTO:
-    MOVLW   5
+
+    MOVLW   10
     SUBWF   HOR1, W
     BTFSC   STATUS, 2
     CALL    HORAS_AUMENTO2
@@ -353,6 +353,7 @@ HORAS_AUMENTO2:
     CLRF    HOR1
     CLRF    STATUS
     INCF    HOR2
+    INCF    chequeo_19
     
     MOVLW   3
     SUBWF   HOR2, W
@@ -360,7 +361,7 @@ HORAS_AUMENTO2:
     CLRF    HOR2
     RETURN 
     
-UNDERFLOW_HORAS:
+/*UNDERFLOW_HORAS:
     MOVLW	0
     XORWF	HOR2, W
     BTFSS	STATUS, 2
@@ -713,12 +714,12 @@ TABLA_7SEG:
     RETLW   00000111B	;7
     RETLW   01111111B	;8
     RETLW   01101111B	;9
-    RETLW   01110111B	;A
+ /*   RETLW   01110111B	;A
     RETLW   01111100B	;b
     RETLW   00111001B	;C
     RETLW   01011110B	;d
     RETLW   01111001B	;E
-    RETLW   01110001B	;F
+    RETLW   01110001B	;F */
 END
 
 
