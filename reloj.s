@@ -28,7 +28,7 @@ PROCESSOR 16F887
   CONFIG  LVP = OFF               ; Low Voltage Programming Enable bit (RB3/PGM pin has PGM function, low voltage programming enabled)
 
 ; CONFIG2
-  CONFIG  BOR4V = BOR40V        ; Brown-out Reset Selection bit (Brown-out Reset set to 4.0V)
+  CONFIG  BOR4V = BOR21V        ; Brown-out Reset Selection bit (Brown-out Reset set to 4.0V)
   CONFIG  WRT = OFF             ; Flash Program Memory Self Write Enable bits (Write protection off)
 
 // config statements should precede project file includes.
@@ -150,6 +150,10 @@ ESTADO_0:
     BTFSC   PORTB, BMODO
     BSF	    BANDERAS, 1
     
+    BSF	    PORTA, 1
+    BCF	    PORTA, 2
+    BCF	    PORTA, 3
+    
     CALL    SEGUIR
     
     BCF	    RBIF			; Limpiamos bandera de interrupción
@@ -164,6 +168,10 @@ ESTADO_1:
     
     CALL    PARAR
     
+    BCF	    PORTA, 1
+    BSF	    PORTA, 2
+    BCF	    PORTA, 3
+    
     RETURN
     
 ESTADO_2:
@@ -173,6 +181,10 @@ ESTADO_2:
     BCF	    BANDERAS, 0
     BCF	    RBIF			; Limpiamos bandera de interrupción
     
+    BCF	    PORTA, 1
+    BCF	    PORTA, 2
+    BSF	    PORTA, 3
+   
     CALL    TIMER
     
     RETURN
@@ -331,8 +343,7 @@ D_HORAS:
     CALL    HORAS_AUMENTO	
     BTFSC   PORTB, BDECREMENTO
     DECF    HOR1
-    ;CALL    UNDERFLOW_HORAS
-    
+    CALL    UNDERFLOW_HORAS
   /* MOVLW	1
     SUBWF	chequeo_underflow2, W
     BTFSC	STATUS, 2
@@ -341,6 +352,8 @@ D_HORAS:
     BCF		RBIF*/
     RETURN
     
+UNDERFLOW_HORAS:
+    RETURN
 HORAS_AUMENTO:
 
     MOVLW   10
@@ -534,13 +547,13 @@ LUCES:
     MOVLW   50
     SUBWF   LUZ, W
     BTFSC   STATUS, 2
-    BSF	    PORTA, 1
+    BSF	    PORTA, 0
     CLRF    STATUS
     
     MOVLW   100
     SUBWF   LUZ, W
     BTFSC   STATUS, 2
-    BCF	    PORTA, 1
+    BCF	    PORTA, 0
     BTFSC   STATUS, 2
     CLRF    LUZ
     RETURN
@@ -620,6 +633,9 @@ CONFIG_TMR0:
     RETURN 
     
 CONFIG_IO:
+    
+    CLRF    banderas		; Limpiamos GPR
+    CLRF    STATUS
     BANKSEL ANSEL
     CLRF    ANSEL
     CLRF    ANSELH		; I/O digitales
@@ -638,9 +654,7 @@ CONFIG_IO:
     CLRF    PORTC		; Apagamos PORTC
     CLRF    PORTD
     CLRF    PORTA
-    
-    CLRF    banderas		; Limpiamos GPR
-    CLRF    STATUS
+
     RETURN
     
 CONFIG_INT:
@@ -697,11 +711,11 @@ SET_DISPLAY:
     
     RETURN
 
-ORG 200h
+ORG 400h
     
 TABLA_7SEG:
     CLRF    PCLATH		; Limpiamos registro PCLATH
-    BSF	    PCLATH, 1		; Posicionamos el PC en dirección 02xxh
+    BSF	    PCLATH, 2		; Posicionamos el PC en dirección 02xxh
     ANDLW   0x0F		; no saltar más del tamaño de la tabla
     ADDWF   PCL
     RETLW   00111111B	;0
@@ -714,7 +728,7 @@ TABLA_7SEG:
     RETLW   00000111B	;7
     RETLW   01111111B	;8
     RETLW   01101111B	;9
- /*   RETLW   01110111B	;A
+ /* RETLW   01110111B	;A
     RETLW   01111100B	;b
     RETLW   00111001B	;C
     RETLW   01011110B	;d
