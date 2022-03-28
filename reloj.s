@@ -28,7 +28,7 @@ PROCESSOR 16F887
   CONFIG  LVP = OFF               ; Low Voltage Programming Enable bit (RB3/PGM pin has PGM function, low voltage programming enabled)
 
 ; CONFIG2
-  CONFIG  BOR4V = BOR40V        ; Brown-out Reset Selection bit (Brown-out Reset set to 4.0V)
+  CONFIG  BOR4V = BOR21V        ; Brown-out Reset Selection bit (Brown-out Reset set to 4.0V)
   CONFIG  WRT = OFF             ; Flash Program Memory Self Write Enable bits (Write protection off)
 
 // config statements should precede project file includes.
@@ -60,6 +60,24 @@ PROCESSOR 16F887
     MOVWF   TMR1L	    ; Guardamos literal en TMR1L
     BCF	    TMR1IF	    ; Limpiamos bandera de int. TMR1
     ENDM
+    
+    TABLA_DISPLAYS  MACRO VAR1, VAR2, VAR3, VAR4
+    MOVF    VAR1, W
+    CALL    TABLA_7SEG		; Buscamos valor a cargar en PORTC
+    MOVWF   HORAS2		; Guardamos en display
+    
+    MOVF    VAR2, W		; Movemos nibble alto a W
+    CALL    TABLA_7SEG		; Buscamos valor a cargar en PORTC
+    MOVWF   HORAS1		; Guardamos en display+1
+  		
+    MOVF    VAR3, W		; Movemos cent a W
+    CALL    TABLA_7SEG		; Buscamos W en la tabla hexadecimal
+    MOVWF   MINUTOS2		; Movemos cent a centenas
+    
+    MOVF    VAR4, W		; Movemos cent a W
+    CALL    TABLA_7SEG		; Buscamos W en la tabla hexadecimal    
+    MOVWF   MINUTOS1		; Movemos dece a decenas 
+    ENDM
   
 ; ------- VARIABLES EN MEMORIA --------
 PSECT udata_shr		    ; Memoria compartida
@@ -90,7 +108,9 @@ TIMER_MINUTOS1: DS 1
 TIMER_MINUTOS2: DS 1
 LUZ:		DS 1
 chequeo_19:	DS 1    
-
+BANDERA_T:	DS 1
+P_SEGUIR:	DS 1
+DECREMENTAR:	DS 1
     
     
 PSECT resVect, class=CODE, abs, delta=2
@@ -138,57 +158,17 @@ INT_PORTB:
     GOTO    ESTADO_0
     BTFSC   BANDERAS, 1
     GOTO    ESTADO_1
-    BTFSC   BANDERAS, 2
-    GOTO    ESTADO_2
-    
     RETURN
 
-    
-ESTADO_0:
-    BTFSC   PORTB, BMODO		; Si se presionó botón de cambio de modo
-    BSF	    BANDERAS, 0		
-    BTFSC   PORTB, BMODO
-    BSF	    BANDERAS, 1
-    
-    BSF	    PORTA, 1
-    BCF	    PORTA, 2
-    BCF	    PORTA, 3
-    
-    CALL    SEGUIR
-    
-    BCF	    RBIF			; Limpiamos bandera de interrupción
-    RETURN
+INT_TMR1:
+    RESET_TMR1 0xF3, 0xCB   ; Reiniciamos TMR1 para 1s
+    BTFSS   BANDERAS, 0 
+    INCF    SEGU
+    BTFSC   BANDERAS, 1
+    DECF    SEGU
+    RETURN	
 
-ESTADO_1:
-    BTFSC   PORTB, BMODO		; Si se presionó botón de cambio de modo
-    BCF	    BANDERAS, 1		
-    BTFSC   PORTB, BMODO
-    BSF	    BANDERAS, 2
-    BCF	    RBIF			; Limpiamos bandera de interrupción
-    
-    CALL    PARAR
-    
-    BCF	    PORTA, 1
-    BSF	    PORTA, 2
-    BCF	    PORTA, 3
-    
-    RETURN
-    
-ESTADO_2:
-    BTFSC   PORTB, BMODO		; Si se presionó botón de cambio de modo
-    BCF	    BANDERAS, 2		
-    BTFSC   PORTB, BMODO
-    BCF	    BANDERAS, 0
-    BCF	    RBIF			; Limpiamos bandera de interrupción
-    
-    BCF	    PORTA, 1
-    BCF	    PORTA, 2
-    BSF	    PORTA, 3
-   
-    CALL    TIMER
-    
-    RETURN
-    
+
 PSECT code, delta=2, abs
 ORG 100h			; posición 100h para el codigo
 ;------------- CONFIGURACION ------------
@@ -198,8 +178,6 @@ MAIN:
     CALL    CONFIG_TMR0		; Configuración de TMR0
     CALL    CONFIG_TMR1		; Configuración de TMR0
     CALL    CONFIG_INT		; Configuración de interrupciones
-    BANKSEL PORTA		; Cambio a banco 00
-    MOVF    PORTB, W
     
 LOOP:
     MOVF    MIN, W		; Valor del PORTA a W
@@ -227,6 +205,47 @@ LUCES:
     RETURN
    
 ; ----------------CHEQUEO DE SEGUNDOS----------**
+    
+ESTADO_0:
+    BTFSC   PORTB, BMODO		; Si se presionó botón de cambio de modo
+    BSF	    BANDERAS, 0		
+    BTFSC   PORTB, BMODO
+    BSF	    BANDERAS, 1
+    
+    BCF	    BANDERA_T, 1
+    BCF	    BANDERA_T, 0
+    
+    BSF	    PORTA, 1
+    BCF	    PORTA, 2
+    
+    CALL    PARAR_SEGUIR
+    
+    BCF	    RBIF			; Limpiamos bandera de interrupción
+    RETURN
+    
+ESTADO_1:
+    BTFSC   PORTB, BMODO		; Si se presionó botón de cambio de modo
+    BCF	    BANDERAS, 0		
+    BTFSC   PORTB, BMODO
+    BCF	    BANDERAS, 1			; Limpiamos bandera de interrupción
+    
+    BSF	    BANDERA_T, 1
+    BSF	    BANDERA_T, 0
+    
+    BCF	    PORTA, 1
+    BSF	    PORTA, 2
+   
+    CALL    TIMER
+    BCF	    RBIF
+    RETURN
+    
+PARAR_SEGUIR:		
+    BTFSC   PORTD, 7
+    CALL    PARAR
+    BTFSS   PORTD, 7
+    CALL    SEGUIR
+    RETURN
+   
     
 SEGUNDOS60:
     MOVLW   1
@@ -302,6 +321,33 @@ CONFIG_TMR0:
     
 CONFIG_IO:
     
+      CLRF    MIN	
+    CLRF    MIN2	
+    CLRF    HOR1	
+    CLRF    HOR2	
+    CLRF    W_TEMP		
+    CLRF    STATUS_TEMP	
+    CLRF    MINUTOS
+    CLRF    SEGU
+    CLRF    valor
+    CLRF    banderas
+    CLRF    MINUTOS1
+    CLRF    MINUTOS2
+    CLRF    HORAS2
+    CLRF    HORAS1
+    CLRF    chequeo_underflow1
+    CLRF    chequeo_underflow2
+    CLRF    BANDERAS
+    CLRF    TIMER_SEGUNDOS1
+    CLRF    TIMER_SEGUNDOS2
+    CLRF    TIMER_MINUTOS1
+    CLRF    TIMER_MINUTOS2
+    CLRF    LUZ
+    CLRF    chequeo_19
+    CLRF    BANDERA_T
+    CLRF    P_SEGUIR
+    CLRF    DECREMENTAR
+    
     CLRF    banderas		; Limpiamos GPR
     CLRF    STATUS
     BANKSEL ANSEL
@@ -322,7 +368,9 @@ CONFIG_IO:
     CLRF    PORTC		; Apagamos PORTC
     CLRF    PORTD
     CLRF    PORTA
+    CLRF    PORTB
 
+    
     RETURN
     
 CONFIG_INT:
@@ -346,42 +394,10 @@ CONFIG_INT:
     
     RETURN
     
-OBTENER_NIBBLE:			;    Ejemplo:
-				; Obtenemos nibble bajo
-    MOVLW   0x0F		;    Valor = 1101 0101
-    ANDWF   valor, W		;	 AND 0000 1111
-    MOVWF   nibbles		;	     0000 0101	
-				; Obtenemos nibble alto
-    MOVLW   0xF0		;     Valor = 1101 0101
-    ANDWF   valor, W		;	  AND 1111 0000
-    MOVWF   nibbles+1		;	      1101 0000
-    SWAPF   nibbles+1, F	;	      0000 1101	
-    RETURN
-    
-;---------CONTADORES DECIMALES------------
-   
-SET_DISPLAY:
-    MOVF    HOR2, W		; Movemos nibble bajo a W
-    CALL    TABLA_7SEG		; Buscamos valor a cargar en PORTC
-    MOVWF   HORAS2		; Guardamos en display
-    
-    MOVF    HOR1, W		; Movemos nibble alto a W
-    CALL    TABLA_7SEG		; Buscamos valor a cargar en PORTC
-    MOVWF   HORAS1		; Guardamos en display+1
-  		
-    MOVF    MIN2, W		; Movemos cent a W
-    CALL    TABLA_7SEG		; Buscamos W en la tabla hexadecimal
-    MOVWF   MINUTOS2		; Movemos cent a centenas
-    
-    MOVF    MIN, W		; Movemos cent a W
-    CALL    TABLA_7SEG		; Buscamos W en la tabla hexadecimal    
-    MOVWF   MINUTOS1		; Movemos dece a decenas 
-    
-    RETURN
-
-    PARAR:
-    BCF	TMR1ON
-    CALL	EDITAR_ACEPTAR
+PARAR:
+    BCF	    TMR1ON
+    CALL    EDITAR_ACEPTAR
+    BCF	    RBIF
     RETURN
 
 EDITAR_ACEPTAR:
@@ -434,7 +450,6 @@ D_MINUTOS:
     RETURN
 	
 IMINUTOS60_1:
-    CLRF    SEGU
     CLRF    STATUS
     BTFSS   PORTD, 5
     INCF    MIN
@@ -544,12 +559,10 @@ D_HORAS:
     RETURN
 	
 IHORAS_1:
-    CLRF    STATUS
-    CALL    CHEQUEO_HORAS
     BCF	    chequeo_19, 0
     
     BTFSS   chequeo_19, 0
-    MOVLW   9
+    MOVLW   10
     BTFSC   chequeo_19, 0
     MOVLW   5
     SUBWF   HOR1, W
@@ -557,18 +570,13 @@ IHORAS_1:
     CALL    IHORAS_2
     RETURN
     
-CHEQUEO_HORAS:
-    MOVLW   2
-    XORWF   HOR2, W
-    BTFSS   STATUS, 2
-    BSF    chequeo_19, 0
-    RETURN
     
     
 IHORAS_2:
     CLRF    HOR1
     CLRF    STATUS
     INCF    HOR2
+    CALL    CHEQUEO_HORAS
     
     MOVLW   3
     SUBWF   HOR2, W
@@ -576,6 +584,13 @@ IHORAS_2:
     CLRF    HOR2
     
     
+    RETURN
+    
+CHEQUEO_HORAS:
+    MOVLW   2
+    SUBWF   HOR2, W
+    BTFSS   STATUS, 2
+    BSF    chequeo_19, 0
     RETURN
     
 UNDERFLOW_HORAS:
@@ -651,15 +666,11 @@ SEGUIR:
 	
     
 TIMER:
+    BTFSS   DECREMENTAR, 0
+    BCF	    TMR1ON
+    BTFSC   DECREMENTAR, 0
+    BSF	    TMR1ON
     RETURN
-    
-    
-    
-INT_TMR1:
-    RESET_TMR1 0xC2, 0xF7   ; Reiniciamos TMR1 para 1s
-    BTFSS   PORTD, 2
-    INCF    SEGU
-    RETURN	
 
 CONFIG_TMR1:
     BANKSEL T1CON	    ; Cambiamos a banco 00
@@ -670,7 +681,7 @@ CONFIG_TMR1:
     BCF	    TMR1GE	    ; TMR1 siempre contando
     BSF	    TMR1ON	    ; Encendemos TMR1
     
-    RESET_TMR1 0xC2, 0xF7   ; TMR1 a 1s
+    RESET_TMR1 0xF3, 0xCB   ; TMR1 a 1s
     RETURN
     
 ;------- VALORES Y DISPLAYS HEXADECIMALES/BINARIOS---------- 
@@ -724,6 +735,35 @@ DISPLAY_3:
     CLRF    banderas
     RETURN
 	
+OBTENER_NIBBLE:			;    Ejemplo:
+				; Obtenemos nibble bajo
+    MOVLW   0x0F		;    Valor = 1101 0101
+    ANDWF   valor, W		;	 AND 0000 1111
+    MOVWF   nibbles		;	     0000 0101	
+				; Obtenemos nibble alto
+    MOVLW   0xF0		;     Valor = 1101 0101
+    ANDWF   valor, W		;	  AND 1111 0000
+    MOVWF   nibbles+1		;	      1101 0000
+    SWAPF   nibbles+1, F	;	      0000 1101	
+    RETURN
+    
+;---------CONTADORES DECIMALES------------
+   
+SET_DISPLAY:
+    
+    BTFSS   BANDERA_T, 0
+    CALL    MOSTRAR_RELOJ
+    BTFSC   BANDERA_T, 1
+    CALL    MOSTRAR_TIMER
+    RETURN
+
+MOSTRAR_RELOJ:
+    TABLA_DISPLAYS HOR2, HOR1, MIN2, MIN
+    RETURN
+    
+MOSTRAR_TIMER:
+    TABLA_DISPLAYS TIMER_MINUTOS2, TIMER_MINUTOS1, TIMER_SEGUNDOS2, TIMER_SEGUNDOS1
+    RETURN 
     
     
 ORG 400h
@@ -743,14 +783,14 @@ TABLA_7SEG:
     RETLW   00000111B	;7
     RETLW   01111111B	;8
     RETLW   01101111B	;9
- /* RETLW   01110111B	;A
+ /*   RETLW   01110111B	;A
     RETLW   01111100B	;b
     RETLW   00111001B	;C
     RETLW   01011110B	;d
     RETLW   01111001B	;E
     RETLW   01110001B	;F */
-END
 
+END
 
 
 
