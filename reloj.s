@@ -168,6 +168,7 @@ INT_TMR1:
     RESET_TMR1 0xF3, 0xCB   ; Reiniciamos TMR1 para 1s
     INCF    SEGU
     RETURN	
+    
 
 PSECT code, delta=2, abs
 ORG 100h			; posición 100h para el codigo
