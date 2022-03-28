@@ -116,6 +116,7 @@ P_SEGUIR:	DS 1
 DECREMENTAR:	DS 1
 FRENO:		DS 1
 AFRENO:		DS 1
+HORA_19:	DS 1
     
 PSECT resVect, class=CODE, abs, delta=2
 ORG 00h			    ; posición 0000h para el reset
@@ -155,6 +156,7 @@ INT_TMR0:
     RESET_TMR0 251		; Reiniciamos TMR0 para 50ms
     CALL    MOSTRAR_VALOR	; Mostramos valor en hexadecimal en los displays
     INCF    LUZ
+    INCF    SEGU
     RETURN
     
 INT_PORTB:
@@ -166,7 +168,7 @@ INT_PORTB:
 
 INT_TMR1:
     RESET_TMR1 0xF3, 0xCB   ; Reiniciamos TMR1 para 1s
-    INCF    SEGU
+    ;INCF    SEGU
     RETURN	
     
 
@@ -282,10 +284,30 @@ HORAS24_1:
     CLRF    STATUS
     INCF    HOR1
     
-    MOVLW   5
+    CALL CHEQUEARH 
+    
+    BTFSS   HORA_19, 0
+    MOVLW   10
+    BTFSC   HORA_19, 0
+    MOVLW   5   
+    
     SUBWF   HOR1, W
     BTFSC   STATUS, 2
     CALL    HORAS24_2
+    RETURN
+    
+CHEQUEARH:
+    MOVLW   2
+    XORWF   HOR2, W
+    BTFSS   STATUS, 2
+    BCF	    HORA_19, 0
+    BTFSS   STATUS, 2
+    RETURN
+    
+    MOVLW   3
+    XORWF   HOR1, W
+    BTFSC   STATUS, 2
+    BSF	    HORA_19, 0
     RETURN
     
 HORAS24_2:
