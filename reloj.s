@@ -101,6 +101,8 @@ HORAS2:		DS 1
 HORAS1:		DS 1
 chequeo_underflow1:	DS 1
 chequeo_underflow2:	DS 1
+Achequeo_underflow1:	DS 1
+Achequeo_underflow2:	DS 1
 BANDERAS:		DS 1
 TIMER_SEGUNDOS1: DS 1
 TIMER_SEGUNDOS2: DS 1
@@ -108,10 +110,12 @@ TIMER_MINUTOS1: DS 1
 TIMER_MINUTOS2: DS 1
 LUZ:		DS 1
 chequeo_19:	DS 1    
+Achequeo_19:	DS 1    
 BANDERA_T:	DS 1
 P_SEGUIR:	DS 1
 DECREMENTAR:	DS 1
-    
+FRENO:		DS 1
+AFRENO:		DS 1
     
 PSECT resVect, class=CODE, abs, delta=2
 ORG 00h			    ; posición 0000h para el reset
@@ -162,12 +166,8 @@ INT_PORTB:
 
 INT_TMR1:
     RESET_TMR1 0xF3, 0xCB   ; Reiniciamos TMR1 para 1s
-    BTFSS   BANDERAS, 0 
     INCF    SEGU
-    BTFSC   BANDERAS, 1
-    DECF    SEGU
     RETURN	
-
 
 PSECT code, delta=2, abs
 ORG 100h			; posición 100h para el codigo
@@ -183,8 +183,8 @@ LOOP:
     MOVF    MIN, W		; Valor del PORTA a W
     MOVWF   valor		; Movemos W a variable valor
     CALL    OBTENER_NIBBLE	; Guardamos nibble alto y bajo de valor
-    CALL    SET_DISPLAY		; Guardamos los valores a enviar en PORTC para mostrar valor en hex
-    CALL    SEGUNDOS60    
+    CALL    SET_DISPLAY		; Guardamos los valores a enviar en PORTC para mostrar valor en hex  
+    CALL    SEGUNDOS60  
     CALL    LUCES
     GOTO    LOOP		; Regresamos al LOOP
     
@@ -203,7 +203,7 @@ LUCES:
     BTFSC   STATUS, 2
     CLRF    LUZ
     RETURN
-   
+    
 ; ----------------CHEQUEO DE SEGUNDOS----------**
     
 ESTADO_0:
@@ -214,11 +214,14 @@ ESTADO_0:
     
     BCF	    BANDERA_T, 1
     BCF	    BANDERA_T, 0
-    
+     
     BSF	    PORTA, 1
     BCF	    PORTA, 2
     
-    CALL    PARAR_SEGUIR
+    BTFSC   FRENO, 0
+    CALL    PARAR
+    BTFSS   FRENO, 0
+    CALL    SEGUIR
     
     BCF	    RBIF			; Limpiamos bandera de interrupción
     RETURN
@@ -234,18 +237,14 @@ ESTADO_1:
     
     BCF	    PORTA, 1
     BSF	    PORTA, 2
-   
-    CALL    TIMER
+    
+    BTFSS   DECREMENTAR, 0
+    CALL    APARAR
+    BTFSC   DECREMENTAR, 0
+    CALL    ASEGUIR
+ 
     BCF	    RBIF
     RETURN
-    
-PARAR_SEGUIR:		
-    BTFSC   PORTD, 7
-    CALL    PARAR
-    BTFSS   PORTD, 7
-    CALL    SEGUIR
-    RETURN
-   
     
 SEGUNDOS60:
     MOVLW   1
@@ -321,7 +320,7 @@ CONFIG_TMR0:
     
 CONFIG_IO:
     
-      CLRF    MIN	
+    CLRF    MIN	
     CLRF    MIN2	
     CLRF    HOR1	
     CLRF    HOR2	
@@ -337,6 +336,8 @@ CONFIG_IO:
     CLRF    HORAS1
     CLRF    chequeo_underflow1
     CLRF    chequeo_underflow2
+    CLRF    Achequeo_underflow1
+    CLRF    Achequeo_underflow2
     CLRF    BANDERAS
     CLRF    TIMER_SEGUNDOS1
     CLRF    TIMER_SEGUNDOS2
@@ -344,9 +345,12 @@ CONFIG_IO:
     CLRF    TIMER_MINUTOS2
     CLRF    LUZ
     CLRF    chequeo_19
+    CLRF    Achequeo_19
     CLRF    BANDERA_T
     CLRF    P_SEGUIR
     CLRF    DECREMENTAR
+    CLRF    FRENO
+    CLRF    AFRENO
     
     CLRF    banderas		; Limpiamos GPR
     CLRF    STATUS
@@ -395,22 +399,17 @@ CONFIG_INT:
     RETURN
     
 PARAR:
+    BTFSC   PORTB, BMODO
+    BCF	    FRENO, 0
     BCF	    TMR1ON
-    CALL    EDITAR_ACEPTAR
     BCF	    RBIF
-    RETURN
-
-EDITAR_ACEPTAR:
-    BTFSS   PORTD, 5		; Verificamos en que estado estamos (S1 o S2)
-    GOTO    ACEPTAR
-    BTFSC   PORTD, 5
-    GOTO    EDITAR
+    CALL    DA_MH
     RETURN
 	
 ACEPTAR:
     BTFSC   PORTB, BEDITAR		; Si se presionó botón de cambio de modo
-    BSF	PORTD, 5		; Pasar a S1		
-    BCF	RBIF
+    BSF	    PORTD, 5		; Pasar a S1		
+    BCF	    RBIF
     RETURN
     
 EDITAR:
@@ -452,7 +451,6 @@ D_MINUTOS:
 IMINUTOS60_1:
     CLRF    STATUS
     BTFSS   PORTD, 5
-    INCF    MIN
     
     MOVLW   10
     SUBWF   MIN, W
@@ -565,6 +563,7 @@ IHORAS_1:
     MOVLW   10
     BTFSC   chequeo_19, 0
     MOVLW   5
+    
     SUBWF   HOR1, W
     BTFSC   STATUS, 2
     CALL    IHORAS_2
@@ -661,16 +660,266 @@ UHORAS_1:
     RETURN
     
 SEGUIR:
+    BTFSC   PORTB, BAUMENTO
+    BSF	    FRENO, 0
     BSF	    TMR1ON
     RETURN
 	
+; --------------------------------------
+
+APARAR:
     
-TIMER:
-    BTFSS   DECREMENTAR, 0
+    BTFSC   PORTB, BEDITAR
+    BSF	    DECREMENTAR, 0
+    
     BCF	    TMR1ON
-    BTFSC   DECREMENTAR, 0
+    BCF	    RBIF
+    CALL    AD_MH
+    RETURN
+	
+AD_MH:
+    BTFSS   PORTD, 6		; Verificamos en que estado estamos (S1 o S2)
+    GOTO    AD_MINUTOS
+    BTFSC   PORTD, 6
+    GOTO    AD_HORAS
+    RETURN
+    
+AD_MINUTOS:
+    BTFSC   PORTB, BELECCION		; Si se presionó botón de cambio de modo
+    BSF	    PORTD, 6
+    BCF	    RBIF
+	
+    BTFSC	PORTB, BAUMENTO
+    INCF	TIMER_SEGUNDOS1
+    BTFSC	PORTB, BAUMENTO
+    CALL	AIMINUTOS60_1
+    BTFSC	PORTB, BDECREMENTO
+    DECF	TIMER_SEGUNDOS1
+    CALL	AUNDERFLOW_MINUTOS
+	
+    MOVLW	1
+    SUBWF	Achequeo_underflow1, W
+    BTFSC	STATUS, 2
+    CALL	ADECREMENTO_RELOJ 
+    CLRF	STATUS
+    BCF		RBIF
+    RETURN
+	
+AIMINUTOS60_1:
+    CLRF    STATUS
+    
+    MOVLW   10
+    SUBWF   TIMER_SEGUNDOS1, W
+    BTFSC   STATUS, 2
+    CALL    AIMINUTOS60_2
+    RETURN
+    
+AIMINUTOS60_2:
+    CLRF    TIMER_SEGUNDOS1
+    CLRF    STATUS
+    INCF    TIMER_SEGUNDOS2
+    
+    MOVLW   10
+    SUBWF   TIMER_SEGUNDOS2, W
+    BTFSC   STATUS, 2
+    CLRF    TIMER_SEGUNDOS2
+    RETURN
+    
+AUNDERFLOW_MINUTOS:
+    MOVLW	0
+    XORWF	TIMER_SEGUNDOS2, W
+    BTFSS	STATUS, 2
+    RETURN
+
+    MOVLW	255
+    XORWF	TIMER_SEGUNDOS1, W
+    BTFSC	STATUS, 2
+    CALL	ACERO
+	
+    RETURN
+	
+ACERO:
+    CLRF    TIMER_SEGUNDOS1		; Limpiamos la variable cent
+    MOVLW   9			; Movemos el valor literal 100 a W
+    SUBWF   TIMER_SEGUNDOS1, W		; A cien le restamos cantidad y lo guardamos en F
+    BTFSC   STATUS, 2		; Chequemoa la bandera STATUS
+    GOTO    $+3			; Nos adelantamos tres posiciones
+    INCF    TIMER_SEGUNDOS1		; Incrementamos cent
+    GOTO    $-5			; Regresamos cinco posiciones
+    
+    CLRF    TIMER_SEGUNDOS2		; Limpiamos la variable cent
+    MOVLW   5			; Movemos el valor literal 100 a W
+    SUBWF   TIMER_SEGUNDOS2, W		; A cien le restamos cantidad y lo guardamos en F
+    BTFSC   STATUS, 2		; Chequemoa la bandera STATUS
+    GOTO    $+3			; Nos adelantamos tres posiciones
+    INCF    TIMER_SEGUNDOS2		; Incrementamos cent
+    GOTO    $-5			; Regresamos cinco posiciones
+	
+    INCF	Achequeo_underflow1
+	
+    RETURN
+	
+ADECREMENTO_RELOJ:
+    MOVLW	255
+    XORWF	TIMER_SEGUNDOS1, W
+    BTFSC	STATUS, 2
+    CALL	AUMINUTOS60_1
+    RETURN 
+    
+AUMINUTOS60_1:	
+    CLRF    TIMER_SEGUNDOS1		; Limpiamos la variable cent
+    MOVLW   9			; Movemos el valor literal 100 a W
+    SUBWF   TIMER_SEGUNDOS1, W		; A cien le restamos cantidad y lo guardamos en F
+    BTFSC   STATUS, 2		; Chequemoa la bandera STATUS
+    GOTO    $+3			; Nos adelantamos tres posiciones
+    INCF    TIMER_SEGUNDOS1		; Incrementamos cent
+    GOTO    $-5			; Regresamos cinco posiciones
+    
+    DECF	TIMER_SEGUNDOS2
+    CALL	ATODO_CERO_M
+    RETURN
+    
+ATODO_CERO_M:
+    MOVLW	0
+    XORWF	TIMER_SEGUNDOS2, W
+    BTFSS	STATUS, 2
+    RETURN
+	
+    MOVLW	1
+    XORWF	TIMER_SEGUNDOS1, W
+    BTFSC	STATUS, 2
+    DECF	Achequeo_underflow1
+    RETURN
+	
+AD_HORAS:
+    BTFSC   PORTB, BELECCION		; Si se presionó botón de cambio de modo
+    BCF	    PORTD, 6
+    BCF	    RBIF
+	
+    BTFSC	PORTB, BAUMENTO
+    INCF	TIMER_MINUTOS1
+    BTFSC	PORTB, BAUMENTO
+    CALL	AIHORAS_1
+    BTFSC	PORTB, BDECREMENTO
+    DECF	TIMER_MINUTOS1
+    CALL	AUNDERFLOW_HORAS
+	
+    MOVLW	1
+    SUBWF	Achequeo_underflow2, W
+    BTFSC	STATUS, 2
+    CALL	ADECREMENTO_RELOJ_H 
+    CLRF	STATUS
+    BCF		RBIF
+    RETURN
+	
+AIHORAS_1:
+    MOVLW   10
+
+    
+    SUBWF   TIMER_MINUTOS1, W
+    BTFSC   STATUS, 2
+    CALL    AIHORAS_2
+    RETURN
+    
+    
+    
+AIHORAS_2:
+    CLRF    TIMER_MINUTOS1
+    CLRF    STATUS
+    INCF    TIMER_MINUTOS2
+    CALL    ACHEQUEO_HORAS
+    
+    MOVLW   10
+    SUBWF   TIMER_MINUTOS2, W
+    BTFSC   STATUS, 2
+    CLRF    TIMER_MINUTOS2
+    
+    
+    RETURN
+    
+ACHEQUEO_HORAS:
+    MOVLW   10
+    SUBWF   TIMER_MINUTOS2, W
+    BTFSS   STATUS, 2
+    BSF	    Achequeo_19, 0
+    RETURN
+    
+AUNDERFLOW_HORAS:
+    MOVLW	0
+    XORWF	TIMER_MINUTOS2, W
+    BTFSS	STATUS, 2
+    RETURN
+
+    MOVLW	255
+    XORWF	TIMER_MINUTOS1, W
+    BTFSC	STATUS, 2
+    CALL	ACERO_H
+	
+    RETURN
+	
+ACERO_H:
+    CLRF    TIMER_MINUTOS1		; Limpiamos la variable cent
+    MOVLW   10			; Movemos el valor literal 100 a W
+    SUBWF   TIMER_MINUTOS1, W		; A cien le restamos cantidad y lo guardamos en F
+    BTFSC   STATUS, 2		; Chequemoa la bandera STATUS
+    GOTO    $+3			; Nos adelantamos tres posiciones
+    INCF    TIMER_MINUTOS1		; Incrementamos cent
+    GOTO    $-5			; Regresamos cinco posiciones
+    
+    CLRF    TIMER_MINUTOS2		; Limpiamos la variable cent
+    MOVLW   10			; Movemos el valor literal 100 a W
+    SUBWF   TIMER_MINUTOS2, W		; A cien le restamos cantidad y lo guardamos en F
+    BTFSC   STATUS, 2		; Chequemoa la bandera STATUS
+    GOTO    $+3			; Nos adelantamos tres posiciones
+    INCF    TIMER_MINUTOS2		; Incrementamos cent
+    GOTO    $-5			; Regresamos cinco posiciones
+	
+    INCF    Achequeo_underflow2
+    CLRF    STATUS
+	
+    RETURN
+	
+ADECREMENTO_RELOJ_H:
+    MOVLW	255
+    XORWF	TIMER_MINUTOS1, W
+    BTFSC	STATUS, 2
+    CALL	AUHORAS_1
+    RETURN 
+    
+AUHORAS_1:	
+    CLRF    TIMER_MINUTOS1		; Limpiamos la variable cent
+    MOVLW   9			; Movemos el valor literal 100 a W
+    SUBWF   TIMER_MINUTOS1, W		; A cien le restamos cantidad y lo guardamos en F
+    BTFSC   STATUS, 2		; Chequemoa la bandera STATUS
+    GOTO    $+3			; Nos adelantamos tres posiciones
+    INCF    TIMER_MINUTOS1		; Incrementamos cent
+    GOTO    $-5			; Regresamos cinco posiciones
+    
+    DECF    TIMER_MINUTOS2
+    CALL    ATODO_CERO_H
+    RETURN
+    
+ATODO_CERO_H:
+    MOVLW	0
+    XORWF	TIMER_MINUTOS2, W
+    BTFSS	STATUS, 2
+    RETURN
+	
+    MOVLW	1
+    XORWF	TIMER_MINUTOS1, W
+    BTFSC	STATUS, 2
+    DECF	Achequeo_underflow2
+    RETURN
+    
+ASEGUIR:
+    BTFSC   PORTB, BEDITAR
+    BCF	    DECREMENTAR, 0
     BSF	    TMR1ON
     RETURN
+    
+
+;--------------------------------------------
+
 
 CONFIG_TMR1:
     BANKSEL T1CON	    ; Cambiamos a banco 00
@@ -747,10 +996,11 @@ OBTENER_NIBBLE:			;    Ejemplo:
     SWAPF   nibbles+1, F	;	      0000 1101	
     RETURN
     
+    
+    
 ;---------CONTADORES DECIMALES------------
    
 SET_DISPLAY:
-    
     BTFSS   BANDERA_T, 0
     CALL    MOSTRAR_RELOJ
     BTFSC   BANDERA_T, 1
@@ -783,7 +1033,7 @@ TABLA_7SEG:
     RETLW   00000111B	;7
     RETLW   01111111B	;8
     RETLW   01101111B	;9
- /*   RETLW   01110111B	;A
+ /* RETLW   01110111B	;A
     RETLW   01111100B	;b
     RETLW   00111001B	;C
     RETLW   01011110B	;d
