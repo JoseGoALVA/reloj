@@ -117,6 +117,10 @@ DECREMENTAR:	DS 1
 FRENO:		DS 1
 AFRENO:		DS 1
 HORA_19:	DS 1
+MES1:		DS 1
+MES2:		DS 1
+DIAS1:		DS 1
+DIAS2:		DS 1
     
 PSECT resVect, class=CODE, abs, delta=2
 ORG 00h			    ; posición 0000h para el reset
@@ -156,7 +160,6 @@ INT_TMR0:
     RESET_TMR0 251		; Reiniciamos TMR0 para 50ms
     CALL    MOSTRAR_VALOR	; Mostramos valor en hexadecimal en los displays
     INCF    LUZ
-    INCF    SEGU
     RETURN
     
 INT_PORTB:
@@ -164,11 +167,13 @@ INT_PORTB:
     GOTO    ESTADO_0
     BTFSC   BANDERAS, 1
     GOTO    ESTADO_1
+    BTFSC   BANDERAS, 2
+    GOTO    ESTADO_2
     RETURN
 
 INT_TMR1:
     RESET_TMR1 0xF3, 0xCB   ; Reiniciamos TMR1 para 1s
-    ;INCF    SEGU
+    INCF    SEGU
     RETURN	
     
 
@@ -215,6 +220,7 @@ ESTADO_0:
     BTFSC   PORTB, BMODO
     BSF	    BANDERAS, 1
     
+    
     BCF	    BANDERA_T, 1
     BCF	    BANDERA_T, 0
      
@@ -231,9 +237,9 @@ ESTADO_0:
     
 ESTADO_1:
     BTFSC   PORTB, BMODO		; Si se presionó botón de cambio de modo
-    BCF	    BANDERAS, 0		
+    BCF	    BANDERAS, 1		
     BTFSC   PORTB, BMODO
-    BCF	    BANDERAS, 1			; Limpiamos bandera de interrupción
+    BSF	    BANDERAS, 2		; Limpiamos bandera de interrupción
     
     BSF	    BANDERA_T, 1
     BSF	    BANDERA_T, 0
@@ -245,6 +251,21 @@ ESTADO_1:
     CALL    APARAR
     BTFSC   DECREMENTAR, 0
     CALL    ASEGUIR
+ 
+    BCF	    RBIF
+    RETURN
+    
+ESTADO_2:
+    BTFSC   PORTB, BMODO		; Si se presionó botón de cambio de modo
+    BCF	    BANDERAS, 2		
+    BTFSC   PORTB, BMODO
+    BCF	    BANDERAS, 0			; Limpiamos bandera de interrupción
+    
+    BSF	    BANDERA_T, 1
+    BSF	    BANDERA_T, 0
+    
+    BSF	    PORTA, 1
+    BSF	    PORTA, 2
  
     BCF	    RBIF
     RETURN
@@ -374,8 +395,9 @@ CONFIG_IO:
     CLRF    DECREMENTAR
     CLRF    FRENO
     CLRF    AFRENO
+    CLRF banderas
     
-    CLRF    banderas		; Limpiamos GPR
+    CLRF    BANDERAS		; Limpiamos GPR
     CLRF    STATUS
     BANKSEL ANSEL
     CLRF    ANSEL
@@ -422,7 +444,7 @@ CONFIG_INT:
     RETURN
     
 PARAR:
-    BTFSC   PORTB, BMODO
+    BTFSC   PORTB, BEDITAR
     BCF	    FRENO, 0
     BCF	    TMR1ON
     BCF	    RBIF
@@ -1028,6 +1050,8 @@ SET_DISPLAY:
     CALL    MOSTRAR_RELOJ
     BTFSC   BANDERA_T, 1
     CALL    MOSTRAR_TIMER
+    BTFSC   BANDERA_T, 2
+    CALL    MOSTRAR_FECHA
     RETURN
 
 MOSTRAR_RELOJ:
@@ -1037,6 +1061,10 @@ MOSTRAR_RELOJ:
 MOSTRAR_TIMER:
     TABLA_DISPLAYS TIMER_MINUTOS2, TIMER_MINUTOS1, TIMER_SEGUNDOS2, TIMER_SEGUNDOS1
     RETURN 
+    
+MOSTRAR_FECHA:
+    TABLA_DISPLAYS MES2, MES1, DIAS2, DIAS1
+    RETURN
     
     
 ORG 400h
@@ -1063,8 +1091,7 @@ TABLA_7SEG:
     RETLW   01111001B	;E
     RETLW   01110001B	;F */
 
-END
-
+ END
 
 
 
