@@ -451,20 +451,6 @@ PARAR:
     CALL    DA_MH
     RETURN
 	
-ACEPTAR:
-    BTFSC   PORTB, BEDITAR		; Si se presionó botón de cambio de modo
-    BSF	    PORTD, 5		; Pasar a S1		
-    BCF	    RBIF
-    RETURN
-    
-EDITAR:
-    BTFSC   PORTB, BEDITAR		; Si se presionó botón de cambio de modo
-    BCF	    PORTD, 5		; Pasar a S0
-	
-    CALL    DA_MH
-    BCF	    RBIF
-    RETURN
-	
 DA_MH:
     BTFSS   PORTD, 6		; Verificamos en que estado estamos (S1 o S2)
     GOTO    D_MINUTOS
